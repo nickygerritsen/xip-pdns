@@ -8,6 +8,8 @@ shopt -s nocasematch
 XIP_DOMAIN="xip.test"
 XIP_ROOT_ADDRESSES=( "127.0.0.1" )
 XIP_NS_ADDRESSES=( "127.0.0.1" )
+XIP_MX_RECORDS=( )
+XIP_DEFAULT_IP_ADDRESS=( "127.0.0.1" )
 XIP_TIMESTAMP="0"
 XIP_TTL=300
 
@@ -68,7 +70,7 @@ log() {
 XIP_DOMAIN_PATTERN="(^|\.)${XIP_DOMAIN//./\.}\$"
 NS_SUBDOMAIN_PATTERN="^ns-([0-9]+)\$"
 IP_SUBDOMAIN_PATTERN="(^|\.)(((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)\.){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\$"
-BASE36_SUBDOMAIN_PATTERN="(^|\.)([a-z0-9]{1,7})\$"
+DASHED_IP_SUBDOMAIN_PATTERN="(^|-|\.)(((25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?)-){3}(25[0-5]|2[0-4][0-9]|[01]?[0-9][0-9]?))\$"
 
 qtype_is() {
   [ "$QTYPE" = "$1" ] || [ "$QTYPE" = "ANY" ]
@@ -95,8 +97,8 @@ subdomain_is_ip() {
   [[ "$SUBDOMAIN" =~ $IP_SUBDOMAIN_PATTERN ]]
 }
 
-subdomain_is_base36() {
-  [[ "$SUBDOMAIN" =~ $BASE36_SUBDOMAIN_PATTERN ]]
+subdomain_is_dashed_ip() {
+  [[ "$SUBDOMAIN" =~ $DASHED_IP_SUBDOMAIN_PATTERN ]]
 }
 
 resolve_ns_subdomain() {
@@ -109,10 +111,13 @@ resolve_ip_subdomain() {
   echo "${BASH_REMATCH[2]}"
 }
 
-resolve_base36_subdomain() {
-  [[ "$SUBDOMAIN" =~ $BASE36_SUBDOMAIN_PATTERN ]] || true
-  local ip=$(( 36#${BASH_REMATCH[2]} ))
-  printf "%d.%d.%d.%d" $(( ip&0xFF )) $(( (ip>>8)&0xFF )) $(( (ip>>16)&0xFF )) $(( (ip>>24)&0xFF ))
+resolve_dashed_ip_subdomain() {
+  [[ "$SUBDOMAIN" =~ $DASHED_IP_SUBDOMAIN_PATTERN ]] || true
+  echo "${BASH_REMATCH[2]//-/.}"
+}
+
+resolve_default_ip_subdomain() {
+  echo "${XIP_DEFAULT_IP_ADDRESS}"
 }
 
 answer_soa_query() {
@@ -132,6 +137,14 @@ answer_root_a_query() {
   local address
   for address in "${XIP_ROOT_ADDRESSES[@]}"; do
     send_answer "A" "$address"
+  done
+}
+
+answer_mx_query() {
+  set -- "${XIP_MX_RECORDS[@]}"
+  while [ $# -gt 1 ]; do
+    send_answer "MX" "$1	$2"
+  shift 2
   done
 }
 
@@ -168,17 +181,24 @@ while read_query; do
         answer_root_a_query
       fi
 
+      if qtype_is "MX"; then
+        answer_mx_query
+      fi
+
     elif qtype_is "A"; then
       extract_subdomain_from_qname
 
       if subdomain_is_ns; then
         answer_subdomain_a_query_for ns
 
+      elif subdomain_is_dashed_ip; then
+        answer_subdomain_a_query_for dashed_ip
+
       elif subdomain_is_ip; then
         answer_subdomain_a_query_for ip
 
-      elif subdomain_is_base36; then
-        answer_subdomain_a_query_for base36
+      else
+        answer_subdomain_a_query_for default_ip
       fi
     fi
   fi

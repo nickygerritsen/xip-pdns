@@ -1,5 +1,5 @@
 # Increment this timestamp when the contents of the file change.
-XIP_TIMESTAMP="2014102800"
+XIP_TIMESTAMP="20161009001"
 
 # The top-level domain for which the name server is authoritative.
 XIP_DOMAIN="xip.test"
@@ -16,3 +16,9 @@ XIP_NS_ADDRESSES=( "1.2.3.4" "1.2.3.5" )
 
 # How long responses should be cached, in seconds.
 XIP_TTL=300
+
+# If no dashed or dotted IP is found, use this IP address
+XIP_DEFAULT_IP_ADDRESS=( "127.0.0.1" )
+
+# MX records to return. Prio + hostname
+XIP_MX_RECORDS=( 10 "mail.xip.test" )
